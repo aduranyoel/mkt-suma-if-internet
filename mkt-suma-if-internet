@@ -1,0 +1,60 @@
+:local IF {"VIP_01"; "VIP_02"; "VIP_03"; "VIP_04"; "VIP_05"; "VIP_06"; "VIP_07"; "VIP_08"; "VIP_09"; "VIP_10"};
+:local TO (:put [:len $IF]);
+:local PA 1;
+:local TA 0;
+:local MAX 0;
+:local SU [/ip firewall mangle print count-only where comment~"uno"];
+:local SD [/ip firewall mangle print count-only where comment~"dos"];
+:log info message="===== BEGIN";
+
+:if ($SD >= 1 || ($SU=0&&$SD=0)) do={
+:log info message="===== UNO";
+
+:foreach w in=$IF do={
+:if ( [/ping 8.8.8.8 routing-table=$w count=2 ] >0 ) do={
+/ip firewall mangle add action=mark-connection chain=prerouting connection-state=new new-connection-mark="con-$PA" nth="$PA,$PA" passthrough=yes src-address-list=SUMA comment=("uno$PA");
+/ip firewall mangle add action=mark-routing chain=prerouting connection-mark="con-$PA" new-routing-mark=$w passthrough=no src-address-list=SUMA comment="routeuno";
+set $PA ($PA+1);
+}
+set $TA ($TA+1);
+:if ($TA = $TO && $PA > 1) do={
+set $MAX ($PA-1);
+:for i from=1 to=($PA-1) do={
+/ip firewall mangle set nth="$MAX,$i" numbers=[find comment=("uno$i")];
+}
+/ip firewall mangle remove numbers=[find comment~"dos*"]
+:log info message="===== END $MAX";
+} else={
+:if ($TA = $TO && $PA = 1) do={
+:log info message="===== NADA";
+}
+}
+}
+
+}
+
+:if ($SU >= 1) do={
+:log info message="===== DOS";
+
+:foreach w in=$IF do={
+:if ( [/ping 8.8.8.8 routing-table=$w count=2 ] >0 ) do={
+/ip firewall mangle add action=mark-connection chain=prerouting connection-state=new new-connection-mark="con-$PA" nth="$PA,$PA" passthrough=yes src-address-list=SUMA comment=("dos$PA");
+/ip firewall mangle add action=mark-routing chain=prerouting connection-mark="con-$PA" new-routing-mark=$w passthrough=no src-address-list=SUMA comment="routedos";
+set $PA ($PA+1);
+}
+set $TA ($TA+1);
+:if ($TA = $TO && $PA > 1) do={
+set $MAX ($PA-1);
+:for i from=1 to=($PA-1) do={
+/ip firewall mangle set nth="$MAX,$i" numbers=[find comment=("dos$i")];
+}
+/ip firewall mangle remove numbers=[find comment~"uno*"]
+:log info message="===== END $MAX";
+} else={
+:if ($TA = $TO && $PA = 1) do={
+:log info message="===== NADA";
+}
+}
+}
+
+}
